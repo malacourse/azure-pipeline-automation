@@ -1,0 +1,159 @@
+# Starter pipeline
+# Start with a minimal pipeline that you can customize to build and deploy your code.
+# Add steps that build, run tests, deploy, and more:
+# https://aka.ms/yaml
+
+parameters:
+- name: deployToDev
+  displayName: Deploy to Dev Namespace
+  type: string
+  default: true
+  values:
+  - true
+  - false
+
+trigger:
+  batch: true
+  branches:
+    include:
+    - features/*
+    exclude:
+    - features/experimental/*
+
+pr: none
+
+resources:
+  repositories:
+  #- repository: SimpleSpring
+  #  type: github
+  #  endpoint: malacourse
+  #  name: malacourse/simple-spring-boot-web
+  #  #ref: master
+  #  trigger:
+  #  - features/*
+  - repository: self
+
+#resources:
+#- repo: self
+
+variables:
+- name: tag
+  value: '$(Build.BuildId)'
+- group: MY-SECRETS
+- name: APP_NAME
+  value: 'ado-spring-demo'
+- name: GIT_COMMIT 
+  value: $(Build.SourceVersion)
+- name: GIT_BRANCH
+  value: $(Build.SourceBranchName)
+- name: GIT_PATH
+  value: 'github.com/malacourse/spring-rest.git'
+- name: UPDATE_DEPLOYMENT
+  value: "${{ parameters.deployToDev }}"
+- name: DEV_CONFIG_BRANCH
+  value: "ocp-dev-config"
+- name: QA_CONFIG_BRANCH
+  value: "ocp-qa-config"
+
+stages:
+- stage: BuildFeature
+  displayName: Build jar and scan
+  jobs:
+  - job: BuildFeature
+    displayName: Maven-Build
+    pool:
+      vmImage: ubuntu-latest
+    steps:
+    - task: Maven@3
+      inputs:
+        mavenPomFile: 'pom.xml'
+        javaHomeOption: 'JDKVersion'
+        mavenVersionOption: 'Default'
+        mavenAuthenticateFeed: false
+        effectivePomSkip: false
+        sonarQubeRunAnalysis: false
+        options: '-DskipTest=true'
+        publishJUnitResults: false
+        sqMavenPluginVersionChoice: 'latest'
+
+    - task: Bash@3
+      name: set_image_tag
+      inputs:
+        targetType: 'inline'
+        script: |
+          pwd
+          ls -lrt
+          # Write your commands here
+          echo "Ver: $(GIT_COMMIT)"
+          echo "##vso[task.setvariable variable=FULL_IMAGE_TAG;]release-$(GIT_COMMIT)"
+    - task: Bash@3
+      name: build_and_push
+      env:
+        REGISTRY_NAME: $(REGISTRY_NAME)
+        REGISTRY_USER: $(REGISTRY_USER)
+        REGISTRY_PASSWORD: $(REGISTRY_PASSWORD)
+        APP_NAME: $(APP_NAME)
+        IMAGE_TAG: "$(FULL_IMAGE_TAG)"
+      inputs:
+        targetType: 'inline'
+        script: |
+          # Write your commands here
+          echo "DtoD: $(UPDATE_DEPLOYMENT)"
+          echo "Image path: $REGISTRY_NAME/$APP_NAME:$IMAGE_TAG"
+          docker build . -t "$REGISTRY_NAME/$APP_NAME:$IMAGE_TAG"
+          if [ $? -ne 0 ]; then
+            echo "Dockker Build Failed, terminating"
+            exit -1
+          fi
+          docker login $REGISTRY_NAME -u $REGISTRY_USER -p $REGISTRY_PASSWORD
+          docker push "$REGISTRY_NAME/$APP_NAME:$IMAGE_TAG"
+    - task: Bash@3
+      name: update_dev_config
+      condition: and(succeeded(), eq(variables.UPDATE_DEPLOYMENT, 'true'))
+      env:
+        GITHUB_TOKEN: $(GIT_TOKEN)
+      inputs:
+        targetType: 'inline'
+        script: |
+          NEW_URL=$(echo https://$GIT_USERNAME:$GIT_TOKEN@$GIT_PATH|tr -d ' \n')
+          echo "GIT NEW URL: $NEW_URL"
+          env | grep TOK
+          git remote set-url origin $NEW_URL
+          git config --global user.email "$GIT_USERNAME@redhat.com"
+          git config --global user.name "$GIT_USERNAME"
+          git config credential.helper 'cache --timeout=30'
+          git remote -v
+          git fetch
+          git switch $DEV_CONFIG_BRANCH
+          sed -i "s/tag:.*/tag: $FULL_IMAGE_TAG/" ./values.yaml
+          cat values.yaml
+          git branch -m "$DEV_CONFIG_BRANCH"
+          git add ./values.yaml
+          git commit -m "Build Update: $FULL_IMAGE_TAG"
+          echo Pushing to origin "$FULL_IMAGE_TAG"
+          git push origin "$DEV_CONFIG_BRANCH"
+    - task: Bash@3
+      name: update_qa_config
+      condition: and(succeeded(), eq(variables.UPDATE_DEPLOYMENT, 'true'))
+      env:
+        GITHUB_TOKEN: $(GIT_TOKEN)
+      inputs:
+        targetType: 'inline'
+        script: |
+          NEW_URL=$(echo https://$GIT_USERNAME:$GIT_TOKEN@$GIT_PATH|tr -d ' \n')
+          echo "GIT NEW URL: $NEW_URL"
+          env | grep TOK
+          git remote set-url origin $NEW_URL
+          git config --global user.email "$GIT_USERNAME@redhat.com"
+          git config --global user.name "$GIT_USERNAME"
+          git config credential.helper 'cache --timeout=30'
+          git remote -v
+          git fetch
+          git switch $QA_CONFIG_BRANCH
+          sed -i "s/tag:.*/tag: $FULL_IMAGE_TAG/" ./values.yaml
+          cat values.yaml
+          git branch -m "$QA_CONFIG_BRANCH"
+          git add ./values.yaml
+          git commit -m "Build Update: $FULL_IMAGE_TAG"
+          echo Pushing to origin "$FULL_IMAGE_TAG"
+          git push origin "$QA_CONFIG_BRANCH"

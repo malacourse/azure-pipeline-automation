@@ -1,0 +1,14 @@
+- name: mikes-build
+  az_project: ado-ocp-test
+  az_organization: https://dev.azure.com/mlacours0374/
+  type: github
+  initialize: true
+  branch: features/pipeline-update
+  build_file: azure-pipelines-build.yml
+- name: mikes-build-2
+  az_project: ado-ocp-test
+  az_organization: https://dev.azure.com/mlacours0374/
+  type: github
+  initialize: true
+  branch: features/pipeline-update
+  build_file: azure-pipelines-build.yml
