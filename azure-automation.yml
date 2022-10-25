@@ -27,6 +27,8 @@ stages:
     steps:
     - task: Bash@3
       name: processYaml
+      env:
+        AZURE_DEVOPS_EXT_GITHUB_PAT: $(AZURE_DEVOPS_EXT_GITHUB_PAT)
       inputs:
         targetType: 'inline'
         script: |
