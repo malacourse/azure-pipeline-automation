@@ -1,5 +1,3 @@
-parameters:
-
 trigger:
   batch: true
   branches:
