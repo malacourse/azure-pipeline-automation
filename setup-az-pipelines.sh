@@ -36,6 +36,7 @@ process_update() {
 
 }
 
+az login -u "$AZ_USERNAME" -p "$AZ_PASSWORD" --allow-no-subscriptions
 curl -L -s -o ./yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O ./yq
 chmod +x ./yq
 PIPE_JSON=$(./yq -o=json  ./pipelines.yml)

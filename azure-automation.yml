@@ -27,8 +27,10 @@ stages:
     steps:
     - task: Bash@3
       name: processYaml
-      env:
+      env: 
         AZURE_DEVOPS_EXT_GITHUB_PAT: $(AZURE_DEVOPS_EXT_GITHUB_PAT)
+        AZ_USERNAME: $(AZ_USERNAME) #With real subscirption a more secure identity would be used
+        AZ_PASSWORD: $(AZ_PASSWORD)
       inputs:
         targetType: 'inline'
         script: |
