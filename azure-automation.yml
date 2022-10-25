@@ -20,13 +20,13 @@ stages:
 - stage: Update Pipelines
   displayName: Update Pipelines
   jobs:
-  - job: BuildFeature
-    displayName: Create Pipelines
+  - job: UpdatePipelines
+    displayName: Update Pipelines
     pool:
       vmImage: ubuntu-latest
     steps:
     - task: Bash@3
-      name: process_yaml
+      name: processYaml
       inputs:
         targetType: 'inline'
         script: |
