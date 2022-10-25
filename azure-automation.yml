@@ -17,7 +17,7 @@ variables:
 - name: APP_NAME
 
 stages:
-- stage: Update Pipelines
+- stage: UpdatePipelines
   displayName: Update Pipelines
   jobs:
   - job: UpdatePipelines
