@@ -6,13 +6,14 @@ process_release() {
   local AZ_ORG=$1
   local AZ_PROJECT=$2
   local RELEASE_NAME=$3
+  local PL_NAME=$4
 
   RELEASE_LIST=$(az pipelines release definition list $AZ_ARGS )
   #echo "Release List: $RELEASE_LIST"
-  POST_DATA=$(jq '.| .name="'$RELEASE_NAME'"' ./files/release-template.json)
+  POST_DATA=$(jq '.| .name="'$PL_NAME-$RELEASE_NAME'"' ./files/release-template.json)
 
   NEW_REL=$(curl  -s -d "$POST_DATA" -u username:$MYPAT -H "Content-Type: application/json" "https://vsrm.dev.azure.com/$AZ_ORG/$AZ_PROJECT/_apis/release/definitions/1?api-version=6.0" | jq .)
-  echo $NEW_REL
+  #echo $NEW_REL
   #RELEASE_COUNT=$(echo $PL_LIST | jq '. | length')
   #if [ $PL_COUNT -gt 0 ]; then
   #  echo "Pipeline Exists, skipping"
@@ -25,6 +26,31 @@ process_release() {
   #fi
 }
 
+add_pipeline_file() {
+echo "Adding build file to repository"
+  local PL_REPO=$1
+  local PL_REPO_BRANCH=$2
+  REPO_PATH=${PL_REPO:8}
+  NEW_URL=$(echo https://$GIT_USERNAME:$GIT_TOKEN@$REPO_PATH|tr -d ' \n')
+  echo "GIT NEW URL: $NEW_URL"
+  CUR_DIR=$(pwd)
+  cd $(mktemp -d)
+  git clone $NEW_URL -- working
+  cd working
+  git config --global user.email "$GIT_USERNAME@redhat.com"
+  git config --global user.name "$GIT_USERNAME"
+  git config credential.helper 'cache --timeout=30'
+  git fetch
+  git switch $PL_REPO_BRANCH
+  cp $CUR_DIR/files/azure-pipelines-build.yml .
+  git branch -m "$PL_REPO_BRANCH/AzureAutomation"
+  git add ./azure-pipelines-build.yml
+  git commit -m "Add azure build and release automation"
+  echo Pushing to origin "$FULL_IMAGE_TAG"
+  git push origin "$PL_REPO_BRANCH/AzureAutomation"
+  cd $CUR_DIR
+}
+
 
 process_pipeline() {
   local AZ_ORG=$1
@@ -35,6 +61,7 @@ process_pipeline() {
   local PL_REPO_BRANCH=$6
   local PL_REPO_BUILD_FILE=$7
   local PL_RELEASES=$8
+  local PL_INIT=$9
 
   AZ_ARGS="--org https://dev.azure.com/$AZ_ORG/ --project $AZ_PROJECT"
 
@@ -52,7 +79,7 @@ process_pipeline() {
   if [ -z "${SVC_ID}" ]; then
     echo "Creating service $SVC_ENDPOINT"
     SVC_ENDPT=$(az devops service-endpoint github create $AZ_ARGS --github-url https://github.com --name $SVC_ENDPOINT --detect true)
-    echo $SVC_ENDPT | jq '. | .id'
+    #echo $SVC_ENDPT | jq '. | .id'
     SVC_ID=$(echo $SVC_ENDPT | jq '. | .id')
   fi
   SERVICE_ID=$(echo "$SVC_ID"  | tr -d '"')
@@ -62,6 +89,11 @@ process_pipeline() {
   if [ $PL_COUNT -gt 0 ]; then
     echo "Pipeline Exists, skipping"
   else
+    if [ $PL_INIT == "true" ]; then
+      add_pipeline_file "$PL_REPO" "$PL_REPO_BRANCH"
+      PL_BUILD_FILE="azure-pipelines-build.yml"
+    fi
+
     NEW_PL=$(az pipelines create $AZ_ARGS --name "$PIPE_NAME" \
         --description "$PIPE_NAME via Automation" --repository-type 'github' \
         --repository "$PL_REPO" --skip-run \
@@ -74,7 +106,7 @@ process_pipeline() {
        echo ${row} | base64 --decode | jq -r ${1}
     }
     RELEASE_NAME=$(echo $(_jq '.name'))
-    process_release "$AZ_ORG" "$AZ_PROJECT" "$RELEASE_NAME"
+    process_release "$AZ_ORG" "$AZ_PROJECT" "$RELEASE_NAME" "$PIPE_NAME"
   done
 
 }
@@ -94,9 +126,10 @@ for row in $(echo "${PIPE_JSON}" | jq -r '.[] | @base64'); do
    AZ_SERVICE=$(echo $(_jq '.az_github_service'))
    PL_REPO=$(echo $(_jq '.repo'))
    PL_BRANCH=$(echo $(_jq '.branch'))
+   PL_INIT=$(echo $(_jq '.initialize_build'))
    PL_BUILD_FILE=$(echo $(_jq '.build_file'))
    PL_RELEASES=$(echo $(_jq '.releases'))
    echo "processing Project: $AZ_PROJECT, Pipeline: $PIPE_NAME, ORG: $AZ_ORG, SVC: $AZ_SERVICE"
-   process_pipeline "$AZ_ORG" "$AZ_PROJECT" "$AZ_SERVICE" "$PIPE_NAME" "$PL_REPO" "$PL_BRANCH" "PL_BUILD_FILE" "$PL_RELEASES"
+   process_pipeline "$AZ_ORG" "$AZ_PROJECT" "$AZ_SERVICE" "$PIPE_NAME" "$PL_REPO" "$PL_BRANCH" "PL_BUILD_FILE" "$PL_RELEASES" "$PL_INIT"
 done
 
