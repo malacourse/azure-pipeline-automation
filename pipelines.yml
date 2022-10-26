@@ -11,3 +11,16 @@
   - name: Deploy-to-OCP
     stages:
     - deploy-to-dev
+- name: mikes-build-new
+  az_project: ado-ocp-test
+  az_organization: mlacours0374
+  az_github_service: malacourse
+  type: github
+  initialize: false
+  repo: https://github.com/malacourse/spring-rest
+  branch: features/pipeline-update
+  build_file: azure-pipelines-build.yml
+  releases:
+  - name: Mikes-Deploy-to-OCP
+    stages:
+    - deploy-to-dev
