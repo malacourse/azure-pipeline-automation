@@ -3,7 +3,7 @@
   az_organization: mlacours0374
   az_github_service: malacourse
   type: github
-  initialize: false
+  initialize_build: false
   repo: https://github.com/malacourse/spring-rest
   branch: features/pipeline-update
   build_file: azure-pipelines-build.yml
@@ -11,16 +11,16 @@
   - name: Deploy-to-OCP
     stages:
     - deploy-to-dev
-- name: mikes-build-new
+- name: mikes-demo
   az_project: ado-ocp-test
   az_organization: mlacours0374
   az_github_service: malacourse
   type: github
-  initialize: false
-  repo: https://github.com/malacourse/spring-rest
-  branch: features/pipeline-update
-  build_file: azure-pipelines-build.yml
+  initialize_build: true
+  repo: https://github.com/malacourse/simple-spring-boot-web.git
+  branch: miketest
+  #build_file: azure-pipelines-build.yml
   releases:
-  - name: Mikes-Deploy-to-OCP
+  - name: Deploy-to-OCP
     stages:
     - deploy-to-dev
