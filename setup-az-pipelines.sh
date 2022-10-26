@@ -1,10 +1,18 @@
 #!/bin/bash
 
 process_release() {
-  echo "Processing Release: $1"
+  echo "Processing Release: $3"
+
+  local AZ_ORG=$1
+  local AZ_PROJECT=$2
+  local RELEASE_NAME=$3
 
   RELEASE_LIST=$(az pipelines release definition list $AZ_ARGS )
-  echo "Release List: $RELEASE_LIST"
+  #echo "Release List: $RELEASE_LIST"
+  POST_DATA=$(jq '.| .name="'$RELEASE_NAME'"' ./files/release-template.json)
+
+  NEW_REL=$(curl  -s -d "$POST_DATA" -u username:$MYPAT -H "Content-Type: application/json" "https://vsrm.dev.azure.com/$AZ_ORG/$AZ_PROJECT/_apis/release/definitions/1?api-version=6.0" | jq .)
+  echo $NEW_REL
   #RELEASE_COUNT=$(echo $PL_LIST | jq '. | length')
   #if [ $PL_COUNT -gt 0 ]; then
   #  echo "Pipeline Exists, skipping"
@@ -28,7 +36,7 @@ process_pipeline() {
   local PL_REPO_BUILD_FILE=$7
   local PL_RELEASES=$8
 
-  AZ_ARGS="--org $AZ_ORG --project $AZ_PROJECT"
+  AZ_ARGS="--org https://dev.azure.com/$AZ_ORG/ --project $AZ_PROJECT"
 
   echo "Creating pipe for Org: $AZ_ORG, Project: $AZ_PROJECT"
   if [[ -z "${AZURE_DEVOPS_EXT_GITHUB_PAT}" ]]; then
@@ -66,7 +74,7 @@ process_pipeline() {
        echo ${row} | base64 --decode | jq -r ${1}
     }
     RELEASE_NAME=$(echo $(_jq '.name'))
-    process_release "$RELEASE_NAME"
+    process_release "$AZ_ORG" "$AZ_PROJECT" "$RELEASE_NAME"
   done
 
 }
